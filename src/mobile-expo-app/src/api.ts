@@ -35,6 +35,12 @@ export interface Dose {
   isTaken: boolean;
 }
 
+export interface Medicine {
+  entityKey: string;
+  isActive: boolean;
+  name: string | null;
+}
+
 export interface PrescriptionSchedule {
   entityKey: string;
   isActive: boolean;
@@ -332,6 +338,34 @@ export async function getCourses(
   return result.map((course, index) =>
     parseCourse(course, `Course ${index + 1}`),
   );
+}
+
+export async function getMedicines(token: string): Promise<Medicine[]> {
+  const response = await authorizedRequest('/Medicines', token);
+  const result: unknown = await response.json();
+
+  if (!Array.isArray(result)) {
+    throw new Error('The medicines API response was not a list.');
+  }
+
+  return result.map((medicine, index) => {
+    if (
+      !isRecord(medicine) ||
+      typeof medicine.entityKey !== 'string' ||
+      typeof medicine.isActive !== 'boolean' ||
+      (medicine.name !== null && typeof medicine.name !== 'string')
+    ) {
+      throw new Error(
+        `Medicine ${index + 1} has an invalid response shape.`,
+      );
+    }
+
+    return {
+      entityKey: medicine.entityKey,
+      isActive: medicine.isActive,
+      name: medicine.name,
+    };
+  });
 }
 
 export async function getCourseByKey(
