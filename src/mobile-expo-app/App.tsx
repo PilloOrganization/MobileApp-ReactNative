@@ -16,7 +16,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import type { PanResponderGestureState } from 'react-native';
+import type {
+  PanResponderGestureState,
+  TextInputInstance,
+} from 'react-native';
 import type { ReactNode } from 'react';
 import {
   createAccount,
@@ -28,11 +31,12 @@ import {
   getAccounts,
   getCourseByKey,
   getCourses,
+  getMedicines,
   loginUser,
   registerUser,
   takeDose,
 } from './src/api';
-import type { Account, Course, Dose } from './src/api';
+import type { Account, Course, Dose, Medicine } from './src/api';
 
 function getLocalDateInputValue(): string {
   const date = new Date();
@@ -311,6 +315,15 @@ export default function App() {
   const [courseDetailError, setCourseDetailError] = useState('');
   const [isCreateScheduleOpen, setIsCreateScheduleOpen] = useState(false);
   const [newMedicineName, setNewMedicineName] = useState('');
+  const [selectedMedicineKey, setSelectedMedicineKey] = useState<
+    string | null
+  >(null);
+  const [isMedicineConfirmed, setIsMedicineConfirmed] = useState(false);
+  const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [isMedicinesLoading, setIsMedicinesLoading] = useState(false);
+  const [medicinesError, setMedicinesError] = useState('');
+  const [showMedicineSuggestions, setShowMedicineSuggestions] =
+    useState(false);
   const [scheduleStartDate, setScheduleStartDate] = useState(
     getLocalDateInputValue,
   );
@@ -326,9 +339,22 @@ export default function App() {
     null,
   );
   const [takingDoseKey, setTakingDoseKey] = useState<string | null>(null);
+  const scheduleDurationInput = useRef<TextInputInstance>(null);
   const accountRequestId = useRef(0);
   const courseRequestId = useRef(0);
   const courseDetailRequestId = useRef(0);
+  const medicinesRequestId = useRef(0);
+
+  const medicineQuery = newMedicineName.trim().toLocaleLowerCase();
+  const filteredMedicines = medicineQuery
+    ? medicines.filter(
+        (medicine) =>
+          medicine.isActive &&
+          medicine.name
+            ?.toLocaleLowerCase()
+            .includes(medicineQuery),
+      )
+    : [];
 
   const loadAccounts = useCallback(async (token: string) => {
     const requestId = ++accountRequestId.current;
@@ -625,6 +651,13 @@ export default function App() {
       setScheduleError('Enter a medicine name.');
       return;
     }
+    if (!isMedicineConfirmed) {
+      setScheduleError(
+        'Select a medicine or choose to use the entered name as a new medicine.',
+      );
+      setShowMedicineSuggestions(true);
+      return;
+    }
     if (!Number.isSafeInteger(durationInDays) || durationInDays < 1) {
       setScheduleError('Enter a duration of at least one day.');
       return;
@@ -648,7 +681,7 @@ export default function App() {
       const createdSchedule = await createPrescriptionSchedule(authToken, {
         courseKey: selectedCourseKey,
         medicineName,
-        medicineKey: null,
+        medicineKey: selectedMedicineKey,
         durationInDays,
         startDate: scheduleStartDate,
         dailyDoseTimes,
@@ -665,6 +698,9 @@ export default function App() {
           : course,
       );
       setNewMedicineName('');
+      setSelectedMedicineKey(null);
+      setIsMedicineConfirmed(false);
+      setShowMedicineSuggestions(false);
       setScheduleNotice('Prescription schedule created.');
       setIsCreateScheduleOpen(false);
     } catch (error) {
@@ -676,6 +712,70 @@ export default function App() {
     } finally {
       setIsCreatingSchedule(false);
     }
+  }
+
+  async function openCreateScheduleForm() {
+    if (isCreateScheduleOpen) {
+      medicinesRequestId.current += 1;
+      setIsMedicinesLoading(false);
+      setIsCreateScheduleOpen(false);
+      setShowMedicineSuggestions(false);
+      return;
+    }
+
+    if (!authToken) {
+      setMedicinesError('You must be signed in to load medicines.');
+      return;
+    }
+
+    setScheduleError('');
+    setScheduleNotice('');
+    setMedicinesError('');
+    setMedicines([]);
+    setNewMedicineName('');
+    setSelectedMedicineKey(null);
+    setIsMedicineConfirmed(false);
+    setIsCreateScheduleOpen(true);
+    setIsMedicinesLoading(true);
+    const requestId = ++medicinesRequestId.current;
+
+    try {
+      const result = await getMedicines(authToken);
+      if (requestId === medicinesRequestId.current) {
+        setMedicines(result);
+      }
+    } catch (error) {
+      if (requestId === medicinesRequestId.current) {
+        setMedicinesError(
+          error instanceof Error ? error.message : 'Unable to load medicines.',
+        );
+      }
+    } finally {
+      if (requestId === medicinesRequestId.current) {
+        setIsMedicinesLoading(false);
+      }
+    }
+  }
+
+  function chooseMedicine(medicine: Medicine) {
+    if (!medicine.name || !medicine.isActive) {
+      return;
+    }
+    setNewMedicineName(medicine.name);
+    setSelectedMedicineKey(medicine.entityKey);
+    setIsMedicineConfirmed(true);
+    setShowMedicineSuggestions(false);
+    scheduleDurationInput.current?.focus();
+  }
+
+  function useNewMedicineName() {
+    if (!newMedicineName.trim()) {
+      return;
+    }
+    setSelectedMedicineKey(null);
+    setIsMedicineConfirmed(true);
+    setShowMedicineSuggestions(false);
+    scheduleDurationInput.current?.focus();
   }
 
   async function confirmDeletePrescriptionSchedule() {
@@ -942,11 +1042,7 @@ export default function App() {
                 <Pressable
                   accessibilityRole="button"
                   disabled={isCreatingSchedule}
-                  onPress={() => {
-                    setScheduleError('');
-                    setScheduleNotice('');
-                    setIsCreateScheduleOpen((open) => !open);
-                  }}
+                  onPress={() => void openCreateScheduleForm()}
                   style={styles.addAccountButton}
                 >
                   <Text style={styles.addAccountButtonText}>
@@ -961,13 +1057,59 @@ export default function App() {
                   </Text>
                   <TextInput
                     autoCapitalize="words"
-                    onChangeText={setNewMedicineName}
+                    onChangeText={(value) => {
+                      setNewMedicineName(value);
+                      setSelectedMedicineKey(null);
+                      setIsMedicineConfirmed(false);
+                      setShowMedicineSuggestions(true);
+                    }}
+                    onFocus={() => setShowMedicineSuggestions(true)}
                     placeholder="Medicine name"
                     placeholderTextColor="#8790A3"
                     returnKeyType="next"
                     style={styles.input}
                     value={newMedicineName}
                   />
+                  {isMedicinesLoading ? (
+                    <ActivityIndicator
+                      color="#3157D5"
+                      style={styles.medicineLoader}
+                    />
+                  ) : null}
+                  {medicinesError ? (
+                    <Text accessibilityRole="alert" style={styles.error}>
+                      {medicinesError}
+                    </Text>
+                  ) : null}
+                  {showMedicineSuggestions && medicineQuery ? (
+                    <ScrollView
+                      keyboardShouldPersistTaps="handled"
+                      nestedScrollEnabled
+                      style={styles.medicineSuggestions}
+                    >
+                      {filteredMedicines.map((medicine) => (
+                        <Pressable
+                          accessibilityRole="button"
+                          key={medicine.entityKey}
+                          onPress={() => chooseMedicine(medicine)}
+                          style={styles.medicineSuggestion}
+                        >
+                          <Text style={styles.medicineSuggestionText}>
+                            {medicine.name}
+                          </Text>
+                        </Pressable>
+                      ))}
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={useNewMedicineName}
+                        style={styles.medicineSuggestion}
+                      >
+                        <Text style={styles.newMedicineSuggestionText}>
+                          Use “{newMedicineName.trim()}” as a new medicine
+                        </Text>
+                      </Pressable>
+                    </ScrollView>
+                  ) : null}
                   <TextInput
                     autoCapitalize="none"
                     keyboardType="number-pad"
@@ -975,6 +1117,7 @@ export default function App() {
                     placeholder="Duration in days"
                     placeholderTextColor="#8790A3"
                     returnKeyType="next"
+                    ref={scheduleDurationInput}
                     style={styles.input}
                     value={scheduleDuration}
                   />
@@ -1746,6 +1889,35 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     marginBottom: 14,
+  },
+  medicineLoader: {
+    marginBottom: 12,
+  },
+  medicineSuggestions: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E1E5EF',
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 14,
+    maxHeight: 220,
+    overflow: 'hidden',
+  },
+  medicineSuggestion: {
+    borderBottomColor: '#E1E5EF',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  medicineSuggestionText: {
+    color: '#17213A',
+    fontSize: 15,
+  },
+  newMedicineSuggestionText: {
+    color: '#3157D5',
+    fontSize: 14,
+    fontWeight: '600',
   },
   fieldLabel: {
     color: '#65708A',
