@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Dimensions,
   KeyboardAvoidingView,
+  Modal,
   PanResponder,
   Platform,
   Pressable,
@@ -156,6 +157,16 @@ function SwipeToDeleteRow({
   canDeleteRef.current = canDelete;
   onDeleteRef.current = onDelete;
 
+  useEffect(() => {
+    if (!canDelete) {
+      isOpen.current = false;
+      Animated.spring(translateX, {
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [canDelete, translateX]);
+
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) =>
@@ -217,6 +228,61 @@ function SwipeToDeleteRow({
           : children}
       </Animated.View>
     </View>
+  );
+}
+
+function DeleteConfirmationModal({
+  visible,
+  title,
+  isBusy,
+  onCancel,
+  onConfirm,
+}: {
+  visible: boolean;
+  title: string;
+  isBusy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Modal
+      animationType="fade"
+      onRequestClose={() => {
+        if (!isBusy) {
+          onCancel();
+        }
+      }}
+      transparent
+      visible={visible}
+    >
+      <View style={styles.deleteModalBackdrop}>
+        <View style={styles.deleteModalCard}>
+          <Text style={styles.deleteModalTitle}>{title}</Text>
+          <View style={styles.deleteActions}>
+            <Pressable
+              accessibilityRole="button"
+              disabled={isBusy}
+              onPress={onCancel}
+              style={styles.cancelDeleteButton}
+            >
+              <Text style={styles.cancelDeleteText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={isBusy}
+              onPress={onConfirm}
+              style={[styles.deleteButton, isBusy && styles.buttonDisabled]}
+            >
+              {isBusy ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.deleteButtonText}>Delete</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -532,7 +598,6 @@ export default function App() {
       setNewAccountFirstName('');
       setNewAccountLastName('');
       setIsCreateAccountOpen(false);
-      setAccountsNotice('Account added.');
       await loadAccounts(authToken);
     } catch (error) {
       setAccountsError(
@@ -561,7 +626,6 @@ export default function App() {
     try {
       await deleteAccount(authToken, accountKey);
       setConfirmDeleteAccountKey(null);
-      setAccountsNotice('Account deleted.');
       await loadAccounts(authToken);
     } catch (error) {
       setAccountsError(
@@ -594,9 +658,7 @@ export default function App() {
       });
       setNewCourseName('');
       setIsCreateCourseOpen(false);
-      if (await loadCourses(authToken, selectedAccountKey)) {
-        setCoursesNotice('Course added.');
-      }
+      await loadCourses(authToken, selectedAccountKey);
     } catch (error) {
       setCoursesError(
         error instanceof Error ? error.message : 'Unable to add course.',
@@ -610,6 +672,7 @@ export default function App() {
     if (
       !authToken ||
       !confirmDeleteCourseKey ||
+      selectedCourseKey === confirmDeleteCourseKey ||
       deletingCourseKey
     ) {
       return;
@@ -624,9 +687,7 @@ export default function App() {
       await deleteCourse(authToken, courseKey);
       setConfirmDeleteCourseKey(null);
       if (selectedAccountKey) {
-        if (await loadCourses(authToken, selectedAccountKey)) {
-          setCoursesNotice('Course deleted.');
-        }
+        await loadCourses(authToken, selectedAccountKey);
       }
       await loadAccounts(authToken);
     } catch (error) {
@@ -701,7 +762,6 @@ export default function App() {
       setSelectedMedicineKey(null);
       setIsMedicineConfirmed(false);
       setShowMedicineSuggestions(false);
-      setScheduleNotice('Prescription schedule created.');
       setIsCreateScheduleOpen(false);
     } catch (error) {
       setScheduleError(
@@ -807,7 +867,6 @@ export default function App() {
           : course,
       );
       setConfirmDeleteScheduleKey(null);
-      setScheduleNotice('Prescription schedule deleted.');
     } catch (error) {
       setScheduleError(
         error instanceof Error
@@ -867,6 +926,255 @@ export default function App() {
     }
   }
 
+  function renderExpandedCourse(courseKey: string) {
+    if (selectedCourseKey !== courseKey) {
+      return null;
+    }
+
+    return (
+      <View style={styles.courseExpansion}>
+        {isCourseLoading ? (
+          <ActivityIndicator color="#3157D5" style={styles.accountLoader} />
+        ) : null}
+        {courseDetailError ? (
+          <Text accessibilityRole="alert" style={styles.error}>
+            {courseDetailError}
+          </Text>
+        ) : null}
+        {selectedCourse?.entityKey === courseKey ? (
+          <>
+            <View style={[styles.sectionHeader, styles.addButtonHeader]}>
+              <Pressable
+                accessibilityLabel={
+                  isCreateScheduleOpen
+                    ? 'Close prescription schedule form'
+                    : 'Add prescription schedule'
+                }
+                accessibilityRole="button"
+                disabled={isCreatingSchedule}
+                onPress={() => void openCreateScheduleForm()}
+                style={styles.addAccountButton}
+              >
+                <Text style={styles.addAccountButtonText}>+</Text>
+              </Pressable>
+            </View>
+            {isCreateScheduleOpen ? (
+              <View style={styles.accountForm}>
+                <Text style={styles.accountFormTitle}>
+                  New prescription schedule
+                </Text>
+                <TextInput
+                  autoCapitalize="words"
+                  onChangeText={(value) => {
+                    setNewMedicineName(value);
+                    setSelectedMedicineKey(null);
+                    setIsMedicineConfirmed(false);
+                    setShowMedicineSuggestions(true);
+                  }}
+                  onFocus={() => setShowMedicineSuggestions(true)}
+                  placeholder="Medicine name"
+                  placeholderTextColor="#8790A3"
+                  returnKeyType="next"
+                  style={styles.input}
+                  value={newMedicineName}
+                />
+                {isMedicinesLoading ? (
+                  <ActivityIndicator
+                    color="#3157D5"
+                    style={styles.medicineLoader}
+                  />
+                ) : null}
+                {medicinesError ? (
+                  <Text accessibilityRole="alert" style={styles.error}>
+                    {medicinesError}
+                  </Text>
+                ) : null}
+                {showMedicineSuggestions && medicineQuery ? (
+                  <ScrollView
+                    keyboardShouldPersistTaps="handled"
+                    nestedScrollEnabled
+                    style={styles.medicineSuggestions}
+                  >
+                    {filteredMedicines.map((medicine) => (
+                      <Pressable
+                        accessibilityRole="button"
+                        key={medicine.entityKey}
+                        onPress={() => chooseMedicine(medicine)}
+                        style={styles.medicineSuggestion}
+                      >
+                        <Text style={styles.medicineSuggestionText}>
+                          {medicine.name}
+                        </Text>
+                      </Pressable>
+                    ))}
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={useNewMedicineName}
+                      style={styles.medicineSuggestion}
+                    >
+                      <Text style={styles.newMedicineSuggestionText}>
+                        Use “{newMedicineName.trim()}” as a new medicine
+                      </Text>
+                    </Pressable>
+                  </ScrollView>
+                ) : null}
+                <TextInput
+                  autoCapitalize="none"
+                  keyboardType="number-pad"
+                  onChangeText={setScheduleDuration}
+                  placeholder="Duration in days"
+                  placeholderTextColor="#8790A3"
+                  returnKeyType="next"
+                  ref={scheduleDurationInput}
+                  style={styles.input}
+                  value={scheduleDuration}
+                />
+                <Text style={styles.fieldLabel}>Start date</Text>
+                <TextInput
+                  autoCapitalize="none"
+                  keyboardType="numbers-and-punctuation"
+                  onChangeText={setScheduleStartDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="#8790A3"
+                  returnKeyType="next"
+                  style={styles.input}
+                  value={scheduleStartDate}
+                />
+                <Text style={styles.fieldLabel}>
+                  Daily dose times (24-hour clock)
+                </Text>
+                <TextInput
+                  autoCapitalize="none"
+                  keyboardType="numbers-and-punctuation"
+                  onChangeText={setDailyDoseTimesInput}
+                  placeholder="08:00, 20:00"
+                  placeholderTextColor="#8790A3"
+                  returnKeyType="done"
+                  style={styles.input}
+                  value={dailyDoseTimesInput}
+                />
+                <Text style={styles.formHint}>
+                  Enter times separated by commas, such as 08:00, 20:00.
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={isCreatingSchedule}
+                  onPress={submitPrescriptionSchedule}
+                  style={[
+                    styles.primaryButton,
+                    isCreatingSchedule && styles.buttonDisabled,
+                  ]}
+                >
+                  {isCreatingSchedule ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>
+                      Create schedule
+                    </Text>
+                  )}
+                </Pressable>
+              </View>
+            ) : null}
+            {scheduleError ? (
+              <Text accessibilityRole="alert" style={styles.error}>
+                {scheduleError}
+              </Text>
+            ) : null}
+            {scheduleNotice ? (
+              <Text style={styles.notice}>{scheduleNotice}</Text>
+            ) : null}
+            {!selectedCourse.prescriptionSchedules?.length ? (
+              <Text style={styles.emptyState}>
+                No prescription schedules for this course.
+              </Text>
+            ) : null}
+            {(selectedCourse.prescriptionSchedules ?? []).map((schedule) => {
+              const days = groupDosesByDay(schedule.doses);
+
+              return (
+                <SwipeToDeleteRow
+                  canDelete
+                  deleteLabel="Delete prescription schedule"
+                  key={schedule.entityKey}
+                  onDelete={() =>
+                    setConfirmDeleteScheduleKey(schedule.entityKey)
+                  }
+                >
+                  {(panHandlers) => (
+                    <View style={[styles.accountCard, styles.accountListCard]}>
+                      <View {...panHandlers} style={styles.accountCardHeader}>
+                        <Text style={styles.accountName} numberOfLines={1}>
+                          {schedule.medicine.name || 'Medicine'}
+                        </Text>
+                        {!schedule.isActive ? (
+                          <Text style={styles.inactiveLabel}>Inactive</Text>
+                        ) : null}
+                      </View>
+                      {days.length === 0 ? (
+                        <Text style={styles.accountDetail}>
+                          No doses scheduled.
+                        </Text>
+                      ) : (
+                        <ScrollView
+                          contentContainerStyle={styles.dayStrip}
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                        >
+                          {days.map((day) => (
+                            <View key={day.dateKey} style={styles.dayColumn}>
+                              <Text style={styles.dayName}>{day.dayName}</Text>
+                              <Text style={styles.dayDate}>
+                                {day.dateLabel}
+                              </Text>
+                              {day.doses.map((dose) => {
+                                const isTaking =
+                                  takingDoseKey === dose.entityKey;
+
+                                return (
+                                  <Pressable
+                                    accessibilityLabel={`${day.dayName}, ${day.dateLabel}, ${formatDoseTime(dose.time)}, ${dose.isTaken ? 'taken' : 'not taken'}`}
+                                    accessibilityRole="button"
+                                    disabled={
+                                      Boolean(takingDoseKey) ||
+                                      Boolean(deletingScheduleKey)
+                                    }
+                                    key={dose.entityKey}
+                                    onPress={() =>
+                                      void toggleDoseTaken(
+                                        schedule.entityKey,
+                                        dose,
+                                      )
+                                    }
+                                    style={[
+                                      styles.doseButton,
+                                      dose.isTaken && styles.doseButtonTaken,
+                                    ]}
+                                  >
+                                    {isTaking ? (
+                                      <ActivityIndicator color="#3157D5" />
+                                    ) : (
+                                      <Text style={styles.doseButtonTime}>
+                                        {formatDoseTime(dose.time)}
+                                      </Text>
+                                    )}
+                                  </Pressable>
+                                );
+                              })}
+                            </View>
+                          ))}
+                        </ScrollView>
+                      )}
+                    </View>
+                  )}
+                </SwipeToDeleteRow>
+              );
+            })}
+          </>
+        ) : null}
+      </View>
+    );
+  }
+
   function openAccountCourses(accountKey: string) {
     if (!authToken) {
       return;
@@ -891,7 +1199,13 @@ export default function App() {
       return;
     }
 
+    if (selectedCourseKey === courseKey) {
+      returnToCourses();
+      return;
+    }
+
     const requestId = ++courseDetailRequestId.current;
+    setConfirmDeleteCourseKey(null);
     setSelectedCourseKey(courseKey);
     setSelectedCourse(null);
     setIsCourseLoading(true);
@@ -986,7 +1300,7 @@ export default function App() {
     const selectedAccount = accounts.find(
       (account) => account.entityKey === selectedAccountKey,
     );
-    if (selectedCourseKey) {
+    if (selectedCourseKey && !selectedAccountKey) {
       return (
         <SwipeBackScreen onSwipeBack={returnToCourses}>
         <SafeAreaView style={styles.screen}>
@@ -1035,19 +1349,19 @@ export default function App() {
               ) : null}
               {selectedCourse ? (
                 <>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.subsectionTitle}>
-                  Prescription schedules
-                </Text>
+              <View style={[styles.sectionHeader, styles.addButtonHeader]}>
                 <Pressable
+                  accessibilityLabel={
+                    isCreateScheduleOpen
+                      ? 'Close prescription schedule form'
+                      : 'Add prescription schedule'
+                  }
                   accessibilityRole="button"
                   disabled={isCreatingSchedule}
                   onPress={() => void openCreateScheduleForm()}
                   style={styles.addAccountButton}
                 >
-                  <Text style={styles.addAccountButtonText}>
-                    {isCreateScheduleOpen ? 'Cancel' : '+ Add'}
-                  </Text>
+                  <Text style={styles.addAccountButtonText}>+</Text>
                 </Pressable>
               </View>
               {isCreateScheduleOpen ? (
@@ -1182,10 +1496,6 @@ export default function App() {
               ) : null}
               {(selectedCourse.prescriptionSchedules ?? []).map((schedule) => {
                 const days = groupDosesByDay(schedule.doses);
-                const isConfirmingDelete =
-                  confirmDeleteScheduleKey === schedule.entityKey;
-                const isDeleting =
-                  deletingScheduleKey === schedule.entityKey;
 
                 return (
                   <SwipeToDeleteRow
@@ -1267,50 +1577,6 @@ export default function App() {
                             ))}
                           </ScrollView>
                         )}
-                        {isConfirmingDelete ? (
-                          <View style={styles.deleteConfirmation}>
-                            <Text style={styles.deletePrompt}>
-                              Delete this prescription schedule?
-                            </Text>
-                            <View style={styles.deleteActions}>
-                              <Pressable
-                                accessibilityRole="button"
-                                disabled={
-                                  Boolean(deletingScheduleKey) ||
-                                  Boolean(takingDoseKey)
-                                }
-                                onPress={() =>
-                                  setConfirmDeleteScheduleKey(null)
-                                }
-                                style={styles.cancelDeleteButton}
-                              >
-                                <Text style={styles.cancelDeleteText}>
-                                  Cancel
-                                </Text>
-                              </Pressable>
-                              <Pressable
-                                accessibilityRole="button"
-                                disabled={
-                                  Boolean(deletingScheduleKey) ||
-                                  Boolean(takingDoseKey)
-                                }
-                                onPress={confirmDeletePrescriptionSchedule}
-                                style={[
-                                  styles.deleteButton,
-                                  isDeleting && styles.buttonDisabled,
-                                ]}
-                              >
-                                {isDeleting ? (
-                                  <ActivityIndicator color="#FFFFFF" />
-                                ) : (
-                                  <Text style={styles.deleteButtonText}>
-                                    Confirm delete
-                                  </Text>
-                                )}
-                              </Pressable>
-                            </View>
-                          </View>
-                        ) : null}
                       </View>
                     )}
                   </SwipeToDeleteRow>
@@ -1320,6 +1586,13 @@ export default function App() {
               ) : null}
             </ScrollView>
           </KeyboardAvoidingView>
+          <DeleteConfirmationModal
+            visible={Boolean(confirmDeleteScheduleKey)}
+            title="Delete this prescription schedule?"
+            isBusy={Boolean(deletingScheduleKey || takingDoseKey)}
+            onCancel={() => setConfirmDeleteScheduleKey(null)}
+            onConfirm={() => void confirmDeletePrescriptionSchedule()}
+          />
         </SafeAreaView>
         </SwipeBackScreen>
       );
@@ -1354,12 +1627,17 @@ export default function App() {
                 <Text style={styles.signOutButtonText}>Sign out</Text>
               </Pressable>
             </View>
-            <Text style={styles.sectionTitle}>
-              {selectedAccountName || 'Account'}
-            </Text>
             <View style={styles.sectionHeader}>
-              <Text style={styles.subsectionTitle}>Courses</Text>
+              <Text
+                numberOfLines={1}
+                style={[styles.sectionTitle, styles.accountHeadingTitle]}
+              >
+                {selectedAccountName || 'Account'}
+              </Text>
               <Pressable
+                accessibilityLabel={
+                  isCreateCourseOpen ? 'Close course form' : 'Add course'
+                }
                 accessibilityRole="button"
                 disabled={isCoursesLoading || isCreatingCourse}
                 onPress={() => {
@@ -1369,9 +1647,7 @@ export default function App() {
                 }}
                 style={styles.addAccountButton}
               >
-                <Text style={styles.addAccountButtonText}>
-                  {isCreateCourseOpen ? 'Cancel' : '+ Add'}
-                </Text>
+                <Text style={styles.addAccountButtonText}>+</Text>
               </Pressable>
             </View>
             {isCreateCourseOpen ? (
@@ -1422,13 +1698,9 @@ export default function App() {
               <Text style={styles.emptyState}>No courses yet.</Text>
             ) : null}
             {courses.map((course) => {
-              const isConfirmingDelete =
-                confirmDeleteCourseKey === course.entityKey;
-              const isDeleting = deletingCourseKey === course.entityKey;
-
               return (
                 <SwipeToDeleteRow
-                  canDelete
+                  canDelete={selectedCourseKey !== course.entityKey}
                   key={course.entityKey}
                   onDelete={() => setConfirmDeleteCourseKey(course.entityKey)}
                 >
@@ -1436,7 +1708,11 @@ export default function App() {
                   <View style={styles.accountCardHeader}>
                     <Pressable
                       accessibilityRole="button"
-                      onPress={() => openCourse(course.entityKey)}
+                      accessibilityState={{
+                        expanded: selectedCourseKey === course.entityKey,
+                      }}
+                      disabled={isCreatingSchedule}
+                      onPress={() => void openCourse(course.entityKey)}
                       style={styles.accountTitleButton}
                     >
                       <Text style={styles.accountName} numberOfLines={1}>
@@ -1447,45 +1723,37 @@ export default function App() {
                       <Text style={styles.inactiveLabel}>Inactive</Text>
                     ) : null}
                   </View>
-                  {isConfirmingDelete ? (
-                    <View style={styles.deleteConfirmation}>
-                      <Text style={styles.deletePrompt}>
-                        Delete this course?
-                      </Text>
-                      <View style={styles.deleteActions}>
-                        <Pressable
-                          accessibilityRole="button"
-                          disabled={isDeleting}
-                          onPress={() => setConfirmDeleteCourseKey(null)}
-                          style={styles.cancelDeleteButton}
-                        >
-                          <Text style={styles.cancelDeleteText}>Cancel</Text>
-                        </Pressable>
-                        <Pressable
-                          accessibilityRole="button"
-                          disabled={isDeleting}
-                          onPress={confirmDeleteCourse}
-                          style={[
-                            styles.deleteButton,
-                            isDeleting && styles.buttonDisabled,
-                          ]}
-                        >
-                          {isDeleting ? (
-                            <ActivityIndicator color="#FFFFFF" />
-                          ) : (
-                            <Text style={styles.deleteButtonText}>
-                              Confirm delete
-                            </Text>
-                          )}
-                        </Pressable>
-                      </View>
-                    </View>
-                  ) : null}
+                  {renderExpandedCourse(course.entityKey)}
                 </View>
                 </SwipeToDeleteRow>
               );
             })}
           </ScrollView>
+          <DeleteConfirmationModal
+            visible={Boolean(confirmDeleteCourseKey || confirmDeleteScheduleKey)}
+            title={
+              confirmDeleteScheduleKey
+                ? 'Delete this prescription schedule?'
+                : 'Delete this course?'
+            }
+            isBusy={Boolean(
+              deletingCourseKey || deletingScheduleKey || takingDoseKey,
+            )}
+            onCancel={() => {
+              if (confirmDeleteScheduleKey) {
+                setConfirmDeleteScheduleKey(null);
+              } else {
+                setConfirmDeleteCourseKey(null);
+              }
+            }}
+            onConfirm={() => {
+              if (confirmDeleteScheduleKey) {
+                void confirmDeletePrescriptionSchedule();
+              } else {
+                void confirmDeleteCourse();
+              }
+            }}
+          />
         </SafeAreaView>
         </SwipeBackScreen>
       );
@@ -1508,6 +1776,9 @@ export default function App() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Accounts</Text>
             <Pressable
+              accessibilityLabel={
+                isCreateAccountOpen ? 'Close account form' : 'Add account'
+              }
               accessibilityRole="button"
               disabled={isAccountsLoading || isCreatingAccount}
               onPress={() => {
@@ -1517,9 +1788,7 @@ export default function App() {
               }}
               style={styles.addAccountButton}
             >
-              <Text style={styles.addAccountButtonText}>
-                {isCreateAccountOpen ? 'Cancel' : '+ Add'}
-              </Text>
+              <Text style={styles.addAccountButtonText}>+</Text>
             </Pressable>
           </View>
           {errorMessage ? (
@@ -1594,8 +1863,6 @@ export default function App() {
               .filter(Boolean)
               .join(' ');
             const isDefault = account.entityKey === defaultAccountKey;
-            const isConfirmingDelete =
-              confirmDeleteAccountKey === account.entityKey;
 
             return (
               <SwipeToDeleteRow
@@ -1620,46 +1887,18 @@ export default function App() {
                       <Text style={styles.inactiveLabel}>Inactive</Text>
                     ) : null}
                   </View>
-                  {isConfirmingDelete ? (
-                    <View style={styles.deleteConfirmation}>
-                      <Text style={styles.deletePrompt}>
-                        Delete this account?
-                      </Text>
-                      <View style={styles.deleteActions}>
-                        <Pressable
-                          accessibilityRole="button"
-                          disabled={deletingAccountKey === account.entityKey}
-                          onPress={() => setConfirmDeleteAccountKey(null)}
-                          style={styles.cancelDeleteButton}
-                        >
-                          <Text style={styles.cancelDeleteText}>Cancel</Text>
-                        </Pressable>
-                        <Pressable
-                          accessibilityRole="button"
-                          disabled={deletingAccountKey === account.entityKey}
-                          onPress={confirmDeleteAccount}
-                          style={[
-                            styles.deleteButton,
-                            deletingAccountKey === account.entityKey &&
-                              styles.buttonDisabled,
-                          ]}
-                        >
-                          {deletingAccountKey === account.entityKey ? (
-                            <ActivityIndicator color="#FFFFFF" />
-                          ) : (
-                            <Text style={styles.deleteButtonText}>
-                              Confirm delete
-                            </Text>
-                          )}
-                        </Pressable>
-                      </View>
-                    </View>
-                  ) : null}
                 </View>
               </SwipeToDeleteRow>
             );
           })}
         </ScrollView>
+        <DeleteConfirmationModal
+          visible={Boolean(confirmDeleteAccountKey)}
+          title="Delete this account?"
+          isBusy={Boolean(deletingAccountKey)}
+          onCancel={() => setConfirmDeleteAccountKey(null)}
+          onConfirm={() => void confirmDeleteAccount()}
+        />
       </SafeAreaView>
     );
   }
@@ -1854,10 +2093,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 14,
   },
+  addButtonHeader: {
+    justifyContent: 'flex-end',
+  },
   sectionTitle: {
     color: '#17213A',
     fontSize: 20,
     fontWeight: '700',
+  },
+  accountHeadingTitle: {
+    flex: 1,
+    marginRight: 12,
   },
   subsectionTitle: {
     color: '#17213A',
@@ -1865,16 +2111,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   addAccountButton: {
+    alignItems: 'center',
     backgroundColor: '#3157D5',
-    borderRadius: 10,
-    marginLeft: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    borderRadius: 22,
+    height: 44,
+    justifyContent: 'center',
+    marginLeft: 'auto',
+    width: 44,
   },
   addAccountButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 28,
     fontWeight: '700',
+    lineHeight: 32,
   },
   accountForm: {
     backgroundColor: '#FFFFFF',
@@ -1957,6 +2206,12 @@ const styles = StyleSheet.create({
   },
   accountListCard: {
     marginBottom: 0,
+  },
+  courseExpansion: {
+    borderTopColor: '#E1E5EF',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: 14,
+    paddingTop: 14,
   },
   swipeRow: {
     borderRadius: 14,
@@ -2082,20 +2337,27 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
-  deleteConfirmation: {
-    borderTopColor: '#E1E5EF',
-    borderTopWidth: 1,
-    marginTop: 14,
-    paddingTop: 14,
+  deleteModalBackdrop: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(23, 33, 58, 0.45)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
   },
-  deletePrompt: {
+  deleteModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    maxWidth: 400,
+    padding: 20,
+    width: '100%',
+  },
+  deleteModalTitle: {
     color: '#17213A',
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 10,
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 20,
   },
   deleteActions: {
-    alignItems: 'center',
     flexDirection: 'row',
     gap: 10,
   },
@@ -2104,6 +2366,7 @@ const styles = StyleSheet.create({
     borderColor: '#E1E5EF',
     borderRadius: 10,
     borderWidth: 1,
+    flex: 1,
     justifyContent: 'center',
     minHeight: 42,
     paddingHorizontal: 14,
@@ -2117,6 +2380,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#B42318',
     borderRadius: 10,
+    flex: 1,
     justifyContent: 'center',
     minHeight: 42,
     paddingHorizontal: 14,
