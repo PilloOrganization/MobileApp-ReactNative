@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>PayloadContent</key><array><dict>
+<key>PayloadContent</key><data>MIIE2zCCA0OgAwIBAgIQe9b7tSwD5ooRgX7tK7zOdzANBgkqhkiG9w0BAQsFADCBhTEeMBwGA1UEChMVbWtjZXJ0IGRldmVsb3BtZW50IENBMS0wKwYDVQQLDCRERVNLVE9QLTVHVUYyMTVcVXNlckBERVNLVE9QLTVHVUYyMTUxNDAyBgNVBAMMK21rY2VydCBERVNLVE9QLTVHVUYyMTVcVXNlckBERVNLVE9QLTVHVUYyMTUwHhcNMjYxMDI3MTc1NzMwWhcNMzYxMDI3MTc1NzMwWjCBhTEeMBwGA1UEChMVbWtjZXJ0IGRldmVsb3BtZW50IENBMS0wKwYDVQQLDCRERVNLVE9QLTVHVUYyMTVcVXNlckBERVNLVE9QLTVHVUYyMTUxNDAyBgNVBAMMK21rY2VydCBERVNLVE9QLTVHVUYyMTVcVXNlckBERVNLVE9QLTVHVUYyMTUwggGiMA0GCSqGSIb3DQEBAQUAA4IBjwAwggGKAoIBgQDUGmSD3DorTDnkJDYH2zBbJAZwEFHDfSq6TPSNQepu/GHz2CTnth8akPdy6DJJ+M3YvRfMCm8JDJjsQN8PSiCHVp4ZSwV3QvhEk8Rh2LQ6f7kqsipG8E1mmT4iMLlHA9UJMAYBKZ7pCELAjphA6M2SUeVMm3H80VjYnpu0Xzmv7EsWof921nqHNGNtEYegOsBQD1Epf7gdvhzc5By5iEYk+GNmJrY9t9CiKkbUgQGzrTXYYY2oKXaCWcETbrzgG/5DwsnjaHJWi7RF07eYLVTMwFSjxqkea63THKeRPR+CXVLz0vRZwXbabY7bW+kVnO7ikwl+BRthHZVWEV8TR3HoTPAC+/Ni1wRcfbThmBDTuyml0hhBo8mWiABIw4xjAN0iVP4BB6lt5vpx6Yh6GgFvEJa0tn/2dyZpDbUS6FfLqQRdeIJF2sygnlw7DlUcXqlaA81FlUmDXhhVI98tB1fAnv4eBONvrR3TCzcwIr9blVsvvLOSRaoxpFgrXCcpbmsCAwEAAaNFMEMwDgYDVR0PAQH/BAQDAgIEMBIGA1UdEwEB/wQIMAYBAf8CAQAwHQYDVR0OBBYEFBsYWgU0AwKqGIXXEoBPLQsg5elvMA0GCSqGSIb3DQEBCwUAA4IBgQBzyExed+uOgEtbURJKKiemgR/3/qWD+NJfxQFvLTqVSnkgHkXzbnnXpkrj/shFYHpucis3nv020XRJzK28yDEXNoJg1/svBT4DEXp8S9Hj9wJuPn4RY4szW5EsvSyrJ/nrEOmy2Iq9j6BMoCoQWgFJxHTWTI/r9BOwboKraalG+r1rIb0XuOtQeZTPts9oOy8AUuk7778AxPMr9f57JH68qRr48zF3CydwPkS/X9JTIyUlw0GoKGIIziAPgqiLIzCyrKXMvJF4eQx1QBjBEiBNjpgkTioCnJ+PZ6L1XB6rTLcRTVe90EYc5rFQMtLsZ8js+ZI5A0RlrmFvmOz6xB1g8P7upSw2n3fwTXj8xPTRpG+bIqqOtzWyf6jTMbhc9Wjl49CSnPZ+qWdcu3EIZQFh4im3V/aMHdd8sdpqgYvs8uJ7CxGCqrmf8bs7SYDo7kYOpytV1dgTHeM3qhTFolCDksvRU4MYbQRHWdlzpHiRFpgDqGGUkwIbKnWQG5b6XoI=</data>
+<key>PayloadDescription</key><string>Trust the local development certificate authority used by the Pillo API.</string>
+<key>PayloadDisplayName</key><string>Pillo Local Development Root CA</string>
+<key>PayloadIdentifier</key><string>local.pillo.development.root.D1DEB3C0-1F07-48A7-B7F2-A49E8254FDE7</string>
+<key>PayloadType</key><string>com.apple.security.root</string>
+<key>PayloadUUID</key><string>D1DEB3C0-1F07-48A7-B7F2-A49E8254FDE7</string>
+<key>PayloadVersion</key><integer>1</integer>
+</dict></array>
+<key>PayloadDescription</key><string>Trust the Pillo local development API certificate on this personal test device.</string>
+<key>PayloadDisplayName</key><string>Pillo Local API Certificate (Development)</string>
+<key>PayloadIdentifier</key><string>local.pillo.development.profile.73DF2FA0-2F2B-465F-AB50-6F38C24534B6</string>
+<key>PayloadRemovalDisallowed</key><false/>
+<key>PayloadType</key><string>Configuration</string>
+<key>PayloadUUID</key><string>73DF2FA0-2F2B-465F-AB50-6F38C24534B6</string>
+<key>PayloadVersion</key><integer>1</integer>
+</dict></plist>
